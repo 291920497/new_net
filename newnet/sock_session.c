@@ -391,7 +391,7 @@ static void accept_cb(sock_session_t* ss) {
 		int add_online = 1;
 
 		//ret = sm_add_client_session(ss->manager_ptr, c_fd, ip, port,ss->flag.bit_proto_commu, et, add_online,MIN_RECV_BUFFER_LENGTH,MAX_RECV_BUFFER_LENGTH,MIN_SEND_BUFFER_LENGTH,MAX_SEND_BUFFER_LENGTH, cb_recv, cb_ping, ss->on_complate_pkg_cb, cb_send, ss->on_disconn_event_cb, ss->user_data);
-		ret = sm_add_client_session(ss->manager_ptr, c_fd, ip, port, ss->flag.bit_proto_commu, et, add_online, ss->i_buf.recv_buf_length, ss->i_buf.recv_buf_max, ss->o_buf.send_buf_length, ss->o_buf.send_buf_max, cb_recv, cb_ping, ss->on_complate_pkg_cb, cb_send, ss->on_disconn_event_cb, ss->user_data);
+		ret = sm_add_client_session(ss->manager_ptr, c_fd, ip, port, ss->flag.bit_proto_commu, et, add_online, ss->i_buf.recv_buf_length, ss->i_buf.recv_buf_max, ss->o_buf.send_buf_length, ss->o_buf.send_buf_max, cb_recv, cb_ping, ss->on_complate_pkg_cb, cb_send, ss->on_create_event_cb, ss->on_disconn_event_cb, ss->user_data);
 		if (!ret) {
 			close(c_fd);
 			printf("[%s] [%s:%d] [%s] function return failed. errmsg: [ %s ], ip: [%s], port: [%d]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, strerror(errno), ip, port);
@@ -505,6 +505,7 @@ void sm_set_running(sock_manager_t* sm, uint8_t running) {
 int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_listen, session_proto_commu_t proto_commu, uint8_t enable_et,
 	uint32_t client_min_recv_len, uint32_t client_max_recv_len, uint32_t client_min_send_len, uint32_t client_max_send_len,
 	void (*client_on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*client_on_create_event_cb)(sock_session_t*),
 	void (*client_on_disconn_event_cb)(sock_session_t*),
 	void* user_data) {
 	if (sm == 0)
@@ -512,7 +513,7 @@ int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_
 
 	int ret, err, optval = 1;
 	int fd, try_count = 1;
-	sock_session_t* ss;
+	sock_session_t* ss = 0;
 	//do {
 	//	fd = socket(AF_INET, SOCK_STREAM, 0);
 	//	//ÈôÊ§°ÜÇÒÉÐÎ´³¢ÊÔ
@@ -569,6 +570,7 @@ int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_
 	ss->on_recv_cb = accept_cb;
 	ss->on_complate_pkg_cb = client_on_complate_pkg_cb;
 	ss->on_disconn_event_cb = client_on_disconn_event_cb;
+	ss->on_create_event_cb = client_on_create_event_cb;
 
 	//add to listener list
 	list_add_tail(&(ss->elem_listens), &(sm->list_listens));
@@ -577,6 +579,7 @@ int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_
 	ret = sm_ep_add_event(sm, ss, EPOLLIN);
 	if (ret)
 		goto sm_add_defult_listen_failed;
+
 	return 0;
 
 sm_add_defult_listen_failed:
@@ -595,6 +598,7 @@ int sm_add_diy_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_lis
 	int (*client_on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
 	void (*client_on_protocol_ping_cb)(sock_session_t*),
 	void (*client_on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*client_on_create_event_cb)(sock_session_t*),
 	void (*client_on_disconn_event_cb)(sock_session_t*),
 	void* user_data) {
 	
@@ -659,6 +663,7 @@ int sm_add_diy_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_lis
 	ss->on_protocol_ping_cb = client_on_protocol_ping_cb;
 	ss->on_complate_pkg_cb = client_on_complate_pkg_cb;
 	ss->on_disconn_event_cb = client_on_disconn_event_cb;
+	ss->on_create_event_cb = client_on_create_event_cb;
 
 	list_add_tail(&(ss->elem_listens), &(sm->list_listens));
 
@@ -683,6 +688,7 @@ sock_session_t* sm_add_client_session(sock_manager_t* sm, int fd, const char* ip
 	void (*on_protocol_ping_cb)(sock_session_t*),
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
 	int (*on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data) {
 
@@ -722,6 +728,7 @@ sock_session_t* sm_add_client_session(sock_manager_t* sm, int fd, const char* ip
 	ss->on_complate_pkg_cb = on_complate_pkg_cb;
 	ss->on_protocol_send_cb = on_protocol_send_cb;
 	ss->on_disconn_event_cb = on_disconn_event_cb;
+	ss->on_create_event_cb = on_create_event_cb;
 
 	int ret = sm_ep_add_event(sm, ss, EPOLLIN);
 	if (ret) {
@@ -733,12 +740,16 @@ sock_session_t* sm_add_client_session(sock_manager_t* sm, int fd, const char* ip
 		list_add_tail(&(ss->elem_online), &(sm->list_online));
 	}
 
+	if (ss->on_create_event_cb)
+		ss->on_create_event_cb(ss);
+
 	return ss;
 }
 
 sock_session_t* sm_add_default_server_sessison(sock_manager_t* sm, const char* ip, uint16_t port, session_proto_commu_t proto_commu, uint8_t enable_et,
 	uint32_t min_recv_len, uint32_t max_recv_len, uint32_t min_send_len, uint32_t max_send_len,
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data) {
 	
@@ -764,7 +775,7 @@ sock_session_t* sm_add_default_server_sessison(sock_manager_t* sm, const char* i
 	}
 
 	sock_session_t* ss = sm_add_diy_server_session(sm, ip, port, enable_et, min_recv_len, max_recv_len, min_send_len, max_send_len,
-		cb_recv, cb_ping, on_complate_pkg_cb, cb_send, on_disconn_event_cb, user_data);
+		cb_recv, cb_ping, on_complate_pkg_cb, cb_send, on_create_event_cb, on_disconn_event_cb, user_data);
 
 	//update to param value
 	if (ss) {
@@ -781,6 +792,7 @@ sock_session_t* sm_add_diy_server_session(sock_manager_t* sm, const char* ip, ui
 	void (*on_protocol_ping_cb)(sock_session_t*),
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, unsigned int),
 	int (*on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data) {
 
@@ -804,6 +816,7 @@ sock_session_t* sm_add_diy_server_session(sock_manager_t* sm, const char* ip, ui
 	ss->on_complate_pkg_cb = on_complate_pkg_cb;
 	ss->on_protocol_send_cb = on_protocol_send_cb;
 	ss->on_disconn_event_cb = on_disconn_event_cb;
+	ss->on_create_event_cb = on_create_event_cb;
 
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(port);
@@ -831,6 +844,10 @@ sock_session_t* sm_add_diy_server_session(sock_manager_t* sm, const char* ip, ui
 	//add servers list
 	list_add_tail(&(ss->elem_servers), &(sm->list_servers));
 	printf("[%s] [%s:%d] [%s] Create server session, ip: [%s], port: [%d], info: [ success ]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port);
+
+	if (ss->on_create_event_cb)
+		ss->on_create_event_cb(ss);
+
 	return ss;
 
 sm_add_server_session_failed:
@@ -932,8 +949,8 @@ void sm_clear_offline(sock_manager_t* sm) {
 }
 
 void sm_broadcast_online(sock_manager_t* sm, const char* data, uint32_t data_len) {
-	sock_session_t* pos;
-	list_for_each_entry(pos, &sm->list_online, elem_online) {
+	sock_session_t* pos, *n;
+	list_for_each_entry_safe(pos, n, &sm->list_online, elem_online) {
 		if (pos->flag.bit_closed == 0 && pos->on_protocol_send_cb) {
 			pos->on_protocol_send_cb(pos, data, data_len);
 		}

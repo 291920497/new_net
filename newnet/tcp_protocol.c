@@ -2,6 +2,8 @@
 #include "sock_session.h"
 //#include "netio_buffer.h"
 
+#include "../tools/basic_tools.h"
+
 //binary
 void tcp_binary_protocol_recv(struct sock_session* ss) {
 	if (ss->flag.bit_closed)
@@ -31,7 +33,7 @@ void tcp_binary_protocol_recv(struct sock_session* ss) {
 
 		//若单包长度超过最大长度-长度类型则关闭客户端
 		if (pkg_len > (ss->i_buf.recv_buf_max - type_length) || !pkg_len) {
-			printf("[%s:%d] function:[%s]  Remove session, ip: [%s], port: [%d], pkg_len: [%d], max_len: [%d], errmsg: [%s]\n", __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, pkg_len, ss->i_buf.recv_buf_max, "Received an incorrect packet length");
+			printf("[%s:%d] function:[%s]  Remove session, ip: [%s], port: [%d], pkg_len: [%d], max_len: [%d], errmsg: [%s]\n", __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, pkg_len, ss->i_buf.recv_buf_max, "Received an incorrect packet length");
 			sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);
 			return;
 		}
@@ -93,11 +95,17 @@ int tcp_binary_protocol_send(struct sock_session* ss, const char* data, TBINARY_
 			//更新未使用的长度
 			unused_len -= type_length;
 
+			if (unused_len >= data_len) {
+				unused_len -= data_len;
+				processed_len += data_len;
+			}
+			else {
+				unused_len = 0;
+				processed_len += unused_len;
+			}
 			//将未使用的缓冲区塞满
-			memcpy(ss->o_buf.send_buf + ss->o_buf.send_len, data, unused_len);
-			ss->o_buf.send_len += unused_len;
-			//更新以处理的长度
-			processed_len += unused_len;
+			memcpy(ss->o_buf.send_buf + ss->o_buf.send_len, data, processed_len);
+			ss->o_buf.send_len += processed_len;
 		}
 		//立即尝试发送
 		sm_send(ss);
@@ -108,7 +116,7 @@ int tcp_binary_protocol_send(struct sock_session* ss, const char* data, TBINARY_
 		//再次校验
 		ret = netio_obuf_check_full(&ss->o_buf, data_len - processed_len);
 		if (ret == 1) {
-			printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Kernel buffer full ,Remaining data out of buffer, Tried, but failed");
+			printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [Kernel buffer full ,Remaining data out of buffer, Tried, but failed]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port);
 			sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);	
 			return -1;
 		}
@@ -119,7 +127,7 @@ int tcp_binary_protocol_send(struct sock_session* ss, const char* data, TBINARY_
 	}
 	else {
 		//打印错误
-		printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, "The data length exceeds twice the buffer");
+		printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, "The data length exceeds twice the buffer");
 		sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);
 		return -1;
 	}
@@ -209,7 +217,7 @@ void tcp_json_protocol_recv(struct sock_session* ss) {
 	else {
 		//如果是数据过大
 		if (len > ss->i_buf.recv_buf_length - sizeof(char) * 2) {
-			printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Not found pkg tail");
+			printf("[%s] [%s:%d] [%s] Remove session, ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Not found pkg tail");
 			sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);
 			return;
 		}
@@ -249,7 +257,7 @@ int tcp_json_protocol_send(struct sock_session* ss, const char* data, uint32_t d
 		ret = netio_obuf_check_full(&ss->o_buf, data_len - processed_len);
 		//只给一次机会,失败则放弃
 		if (ret == 1 || ret == -1) {
-			printf("[%s] [%s:%d] [%s], Remove session ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Kernel buffer full ,Remaining data out of buffer, Tried, but failed");
+			printf("[%s] [%s:%d] [%s], Remove session ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Kernel buffer full ,Remaining data out of buffer, Tried, but failed");
 			sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);
 			return -1;
 		}
@@ -260,7 +268,7 @@ int tcp_json_protocol_send(struct sock_session* ss, const char* data, uint32_t d
 	}
 	else {
 		//打印错误
-		printf("[%s] [%s:%d] [%s], Remove session ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILE__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Kernel buffer full ,Remaining data out of buffer");
+		printf("[%s] [%s:%d] [%s], Remove session ip: [%s], port: [%d] errmsg: [%s]\n ", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, "Kernel buffer full ,Remaining data out of buffer");
 		sm_del_session(ss, ss->flag.bit_is_server ? -1 : 0);
 		return -1;
 	}

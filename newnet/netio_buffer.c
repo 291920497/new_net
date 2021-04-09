@@ -98,41 +98,29 @@ int netio_obuf_check_full(neto_buffer_t* nb, uint32_t output_len) {
 	if (all_len > nb->send_buf_length) {
 		//若没有超过最大长度则尝试更换缓冲区,此处包含了0xffffffff的判断
 		if (all_len <= nb->send_buf_max) {
-			//char* new_buf = (char*)netio_malloc(all_len);
-			char* new_buf = (char*)malloc(all_len);
-			if (new_buf == 0)
+			nb->send_buf = realloc(nb->send_buf, all_len);
+			if (nb->send_buf == 0) {
+				nb->send_buf_length = 0;
 				return -1;
-
-			//将旧的数据拷贝到新的内存
-			if (nb->send_len) {
-				memcpy(new_buf, nb->send_buf, nb->send_len);
 			}
-
-			//更新当前长度
 			nb->send_buf_length = all_len;
-			free(nb->send_buf);
-			nb->send_buf = new_buf;
 			return 0;
-		}
-		else {
+
+		}else {
 			//若大于最大长度两倍
 			if (all_len > (nb->send_buf_max * 2)) {
 				return -1;
 			}
-
+			//此处需要判断如果已经是最大值 则不需要再malloc
 			//char* new_buf = (char*)netio_malloc(nb->send_buf_max);
-			char* new_buf = (char*)malloc(nb->send_buf_max);
-			if (new_buf == 0)
-				return -1;
-
-			if (nb->send_len)
-				memcpy(new_buf, nb->send_buf, nb->send_len);
-
-			//更新当前长度
-			nb->send_buf_length = nb->send_buf_max;
-			free(nb->send_buf);
-			nb->send_buf = new_buf;
-
+			if (nb->send_buf_length < nb->send_buf_max) {
+				nb->send_buf = realloc(nb->send_buf, nb->send_buf_max);
+				if (nb->send_buf == 0) {
+					nb->send_buf_length = 0;
+					return -1;
+				}
+				nb->send_buf_length = nb->send_buf_max;
+			}
 			//若不大于两倍，则拷贝缓冲区剩余长度的数据到缓冲区，发送后再重试，若依旧为当前返回值，则关闭套接字
 			return 1;
 		}
