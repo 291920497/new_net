@@ -226,10 +226,13 @@ static int s_reconnect_server(sock_session_t* ss) {
 	}
 	//If you are in the third handshake pending, it's not a error
 	else {
-		ss->flag.bit_closed = 0;
 		ret = sm_ep_add_event(ss->manager_ptr, ss, EPOLLIN);
-		if (ret)
+		if (ret) {
+			printf("[%s] [%s:%d] [%s] Add event failed, ip: [%s], port: [%d] errmsg: [%s]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, ss->ip, ss->port, strerror(errno));
 			return -1;
+		}
+			
+		ss->flag.bit_closed = 0;
 	}
 	return 0;
 }
@@ -239,7 +242,7 @@ static int s_reconnect_server(sock_session_t* ss) {
 */
 
 //heart callback
-static void cb_on_heart_timeout(void* p) {
+static void cb_on_heart_timeout(uint32_t timer_id, void* p) {
 	sock_manager_t* sm = (sock_manager_t*)p;
 
 	uint64_t cur_t = time(0);
@@ -267,7 +270,7 @@ static void cb_on_heart_timeout(void* p) {
 }
 
 //reconnect server callback
-static void cb_on_reconnection_timeout(void* p) {
+static void cb_on_reconnection_timeout(uint32_t timer_id, void* p) {
 	sock_manager_t* sm = (sock_manager_t*)p;
 
 	int ret;
@@ -442,9 +445,9 @@ sock_manager_t* sm_init_manager() {
 
 	//add default timer
 	//heart cb
-	ht_add_timer(sm->ht_timer, MAX_HEART_TIMEOUT * 1000, -1, cb_on_heart_timeout, sm);
+	ht_add_timer(sm->ht_timer, MAX_HEART_TIMEOUT * 1000, 0, -1, cb_on_heart_timeout, sm);
 	//server reconnect cb
-	ht_add_timer(sm->ht_timer, MAX_RECONN_SERVER_TIMEOUT * 1000, -1, cb_on_reconnection_timeout, sm);
+	ht_add_timer(sm->ht_timer, MAX_RECONN_SERVER_TIMEOUT * 1000, 0, -1, cb_on_reconnection_timeout, sm);
 
 	return sm;
 
@@ -465,7 +468,7 @@ void sm_exit_manager(sock_manager_t* sm) {
 	//clean resources and all session
 	sock_session_t* pos, *n;
 	list_for_each_entry_safe(pos, n, &sm->list_online, elem_online) {
-		printf("[%s] [%s:%d] [%s] Clean client session, ip: [%s], port: [%d] errmsg: [Active cleaning]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, pos->ip, pos->port);
+		printf("[%s] [%s:%d] [%s] Clean Online session, ip: [%s], port: [%d] errmsg: [Active cleaning]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, pos->ip, pos->port);
 		sm_del_session(pos, 0);
 	}
 
@@ -580,6 +583,7 @@ int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_
 	if (ret)
 		goto sm_add_defult_listen_failed;
 
+	printf("[%s] [%s:%d] [%s] Add default listener, port: [%d] info: [Success]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, listen_port);
 	return 0;
 
 sm_add_defult_listen_failed:
@@ -589,6 +593,7 @@ sm_add_defult_listen_failed:
 	if (fd != -1) {
 		close(fd);
 	}
+	printf("[%s] [%s:%d] [%s] Add default listener port: [%d] errmsg: [%s]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, listen_port, strerror(errno));
 	return -1;
 }
 
@@ -670,6 +675,8 @@ int sm_add_diy_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_lis
 	ret = sm_ep_add_event(sm, ss, EPOLLIN);
 	if (ret) 
 		goto sm_add_diy_listen_failed;
+
+	printf("[%s] [%s:%d] [%s] Add diy listener, port: [%d] info: [Success]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, listen_port);
 	return 0;
 
 sm_add_diy_listen_failed:
@@ -679,6 +686,7 @@ sm_add_diy_listen_failed:
 	if (fd != -1) {
 		close(fd);
 	}
+	printf("[%s] [%s:%d] [%s] Add diy listener, port: [%d] errmsg: [%s]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, listen_port, strerror(errno));
 	return -1;
 }
 
@@ -878,11 +886,11 @@ void sm_del_session(sock_session_t* ss, uint32_t delay_destruction) {
 }
 
 
-uint32_t sm_add_timer(sock_manager_t* sm, uint32_t interval_ms, int32_t repeat, void(*callback_function)(void*), void* user_data) {
+uint32_t sm_add_timer(sock_manager_t* sm, uint32_t interval_ms, uint32_t delay_ms, int32_t repeat, void(*callback_function)(uint32_t, void*), void* user_data) {
 	if (sm == 0 || sm->ht_timer == 0)
 		return -1;
 
-	return ht_add_timer(sm->ht_timer, interval_ms, repeat, callback_function, user_data);
+	return ht_add_timer(sm->ht_timer, interval_ms, delay_ms, repeat, callback_function, user_data);
 }
 
 /*
@@ -925,7 +933,7 @@ void sm_clear_offline(sock_manager_t* sm) {
 
 	//clean offline
 	list_for_each_entry_safe(pos,n , &sm->list_offline, elem_offline) {
-		//printf("[%s] [%s:%d] [%s] Clean client session, ip: [%s], port: [%d] errmsg: [Active cleaning]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, pos->ip, pos->port);
+		//printf("[%s] [%s:%d] [%s] Clean offline session, ip: [%s], port: [%d] errmsg: [Active cleaning]\n", tools_get_time_format_string(), __FILENAME__, __LINE__, __FUNCTION__, pos->ip, pos->port);
 		list_del_init(&pos->elem_offline);
 		int ret = close(pos->fd);
 		if (ret == -1) {
@@ -995,6 +1003,7 @@ void sm_recv(sock_session_t* ss) {
 	}
 
 	//If the length is less than the requested length
+	/*
 	if (recved < unused_len) {
 		if (list_empty(&ss->elem_pending_recv) == 0)
 			list_del_init(&ss->elem_pending_recv);
@@ -1003,6 +1012,24 @@ void sm_recv(sock_session_t* ss) {
 	else {
 		if (list_empty(&ss->elem_pending_recv) != 0)
 			list_add_tail(&ss->elem_pending_recv, &ss->manager_ptr->list_pending_recv);
+	}
+	*/
+
+	//et model add pending recv list
+	if (ss->epoll_state & EPOLLET) {
+		if (list_empty(&ss->elem_pending_recv) != 0)
+			list_add_tail(&ss->elem_pending_recv, &ss->manager_ptr->list_pending_recv);
+	}
+	else {
+		if (recved < unused_len) {
+			if (list_empty(&ss->elem_pending_recv) == 0)
+				list_del_init(&ss->elem_pending_recv);
+
+		}
+		else {
+			if (list_empty(&ss->elem_pending_recv) != 0)
+				list_add_tail(&ss->elem_pending_recv, &ss->manager_ptr->list_pending_recv);
+		}
 	}
 
 	ss->i_buf.recv_len += recved;

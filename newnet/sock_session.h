@@ -130,6 +130,7 @@ typedef struct sock_session {
 	void (*on_protocol_ping_cb)(sock_session_t*);	
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, uint32_t);
 	int (*on_protocol_send_cb)(sock_session_t*, const char*, unsigned int);
+	void (*on_create_event_cb)(sock_session_t*);
 	void (*on_disconn_event_cb)(sock_session_t*);
 
 	list_head_t		elem_online;
@@ -201,6 +202,7 @@ void sm_set_running(sock_manager_t* sm, uint8_t running);
 int sm_add_defult_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_listen, session_proto_commu_t proto_commu, uint8_t enable_et,
 	uint32_t client_min_recv_len, uint32_t client_max_recv_len, uint32_t client_min_send_len, uint32_t client_max_send_len,
 	void (*client_on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*client_on_create_event_cb)(sock_session_t*),
 	void (*client_on_disconn_event_cb)(sock_session_t*),
 	void* user_data);
 
@@ -214,6 +216,7 @@ int sm_add_diy_listen(sock_manager_t* sm, uint16_t listen_port, uint32_t max_lis
 	int (*client_on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
 	void (*client_on_protocol_ping_cb)(sock_session_t*),
 	void (*client_on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*client_on_create_event_cb)(sock_session_t*),
 	void (*client_on_disconn_event_cb)(sock_session_t*),
 	void* user_data);
 
@@ -227,6 +230,7 @@ sock_session_t* sm_add_client_session(sock_manager_t* sm, int fd, const char* ip
 	void (*on_protocol_ping_cb)(sock_session_t*),
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
 	int (*on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data);
 
@@ -237,6 +241,7 @@ sock_session_t* sm_add_client_session(sock_manager_t* sm, int fd, const char* ip
 sock_session_t* sm_add_default_server_sessison(sock_manager_t* sm, const char* ip, uint16_t port, session_proto_commu_t proto_commu, uint8_t enable_et,
 	uint32_t min_recv_len, uint32_t max_recv_len, uint32_t min_send_len, uint32_t max_send_len,
 	void (*on_complate_pkg_cb)(sock_session_t*, char*, uint32_t),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data);
 
@@ -246,6 +251,7 @@ sock_session_t* sm_add_diy_server_session(sock_manager_t* sm, const char* ip, ui
 	void (*on_protocol_ping_cb)(sock_session_t*),
 	void (*complate_pkg_cb)(sock_session_t*, char*, unsigned int),
 	int (*on_protocol_send_cb)(sock_session_t*, const char*, unsigned int),
+	void (*on_create_event_cb)(sock_session_t*),
 	void (*on_disconn_event_cb)(sock_session_t*),
 	void* user_data);
 
@@ -262,7 +268,7 @@ void sm_del_session(sock_session_t* ss, uint32_t delay_destruction);
 *	@repeat: repeat times (-1: unlimited)
 *	return timer id, or -1 for error
 */
-uint32_t sm_add_timer(sock_manager_t* sm, uint32_t interval_ms, int32_t repeat, void(*callback_function)(void*), void* user_data);
+uint32_t sm_add_timer(sock_manager_t* sm, uint32_t interval_ms, uint32_t delay_ms, int32_t repeat, void(*callback_function)(uint32_t, void*), void* user_data);
 
 /**
 *	sm_del_timer - Remove a timer event
