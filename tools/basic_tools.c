@@ -108,7 +108,7 @@ const char* tools_get_time_format_string() {
 	struct tm t;
 	localtime_r(&tv.tv_sec, &t);
 
-	static char time_fmt[32];
+	static char time_fmt[64];
 	sprintf(time_fmt, "%04d-%02d-%02d %02d:%02d:%02d.%06d",
 	//sprintf(time_fmt, "%04d-%02d-%02d %02d:%02d:%02d.%03d",
 		t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,

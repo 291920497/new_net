@@ -30,7 +30,7 @@ typedef struct timer_element {
 	uint64_t ring_time;	//响铃时间
 	int32_t repeat;	//重复次数
 	void* user_data;
-	void(*on_timeout)(void*);
+	void(*on_timeout)(uint32_t, void*);
 }timer_element_t;
 
 typedef struct heap_timer {
@@ -60,7 +60,7 @@ void ht_destroy_heap_timer(heap_timer_t* ht);
 	-1 failed;
 	other timer_id;
 */
-uint32_t ht_add_timer(heap_timer_t* ht, uint32_t interval, int32_t repeat, void(*on_timeout)(void*), void* user_data);
+uint32_t ht_add_timer(heap_timer_t* ht, uint32_t interval, uint32_t delay_ms, int32_t repeat, void(*on_timeout)(uint32_t, void*), void* user_data);
 
 void ht_del_timer(heap_timer_t* ht, uint32_t timer_id);
 
